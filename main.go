@@ -18,9 +18,10 @@ var (
 	modeEXIF  = "exif"
 	modeMtime = "mtime"
 
-	loc   *time.Location
-	doit  bool
 	debug bool
+	root  string
+	doit  bool
+	loc   *time.Location
 
 	existname map[string]bool
 )
@@ -30,7 +31,7 @@ func main() {
 	fv := flag.Bool("v", false, "Show version.")
 	fexif := flag.Bool("exif", false, "Rename with EXIF time.")
 	fmtime := flag.Bool("mtime", false, "Rename with modify time.")
-	fpath := flag.String("path", ".", "File directory path.")
+	froot := flag.String("root", ".", "File root path.")
 	ftz := flag.String("tz", "Asia/Chongqing", "Time zone.")
 	fdoit := flag.Bool("doit", false, "Do it (not dry run).")
 	fdebug := flag.Bool("debug", false, "Debug mode.")
@@ -71,31 +72,33 @@ func main() {
 	debug = *fdebug
 	existname = make(map[string]bool)
 
-	filepath.Walk(*fpath, re)
+	root = validPath(*froot)
+	filepath.Walk(root, rename)
 }
 
-func re(path string, info os.FileInfo, err error) error {
+func rename(path string, info os.FileInfo, err error) error {
 	if err != nil {
+		if debug {
+			fmt.Println(err)
+		}
 		return err
 	}
-	// ignore hidden file
-	if path[:1] == "." || filepath.Base(path)[:1] == "." {
+
+	if info.IsDir() {
 		return nil
 	}
-	// ignore subdir
-	if info.IsDir() {
-		if info.Name() == path {
-			return nil
-		}
-		return filepath.SkipDir
+
+	// ignore hidden file
+	if info.Name()[:1] == "." {
+		return nil
 	}
 
 	tname, err := timename(path, info)
 	if err != nil {
 		if debug {
-			fmt.Printf("%s => %v\n", path, err)
+			fmt.Printf("%s => %v\n", simplePath(path), err)
 		} else {
-			fmt.Printf("%s => ?\n", path)
+			fmt.Printf("%s => ?\n", simplePath(path))
 		}
 		return nil
 	}
@@ -109,7 +112,7 @@ func re(path string, info os.FileInfo, err error) error {
 	}
 	existname[newpath] = true
 
-	fmt.Printf("%s => %s\n", path, newpath)
+	fmt.Printf("%s => %s\n", simplePath(path), simplePath(newpath))
 	if doit {
 		err = os.Rename(path, newpath)
 		if err != nil {
@@ -119,6 +122,34 @@ func re(path string, info os.FileInfo, err error) error {
 	}
 
 	return nil
+}
+
+func simplePath(p string) string {
+	if filepath.HasPrefix(p, root) {
+		p = p[len(root):]
+	}
+	if p[:1] == "/" {
+		p = p[1:]
+	}
+	return p
+}
+
+func validPath(path string) string {
+	if path == "" {
+		path = "."
+	}
+
+	if p, err := filepath.Abs(path); err != nil {
+		log.Fatalf("path(%s) error: %v", path, err)
+	} else {
+		path = p
+	}
+
+	if !isExist(path) {
+		log.Fatalf("path(%s) not exist", path)
+	}
+
+	return path
 }
 
 func timename(path string, info os.FileInfo) (tname string, err error) {
