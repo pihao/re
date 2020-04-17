@@ -84,12 +84,16 @@ func rename(path string, info os.FileInfo, err error) error {
 		return err
 	}
 
-	if info.IsDir() {
+	if info.Name()[:1] == "." {
+		// ignore all sub files of hidden dir
+		if info.IsDir() {
+			return filepath.SkipDir
+		}
+		// ignore hidden file
 		return nil
 	}
 
-	// ignore hidden file
-	if info.Name()[:1] == "." {
+	if info.IsDir() {
 		return nil
 	}
 
