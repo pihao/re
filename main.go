@@ -11,7 +11,7 @@ import (
 	"github.com/rwcarlsen/goexif/exif"
 )
 
-const version = "0.1.0"
+const version = "0.1.1"
 
 var (
 	mode      string
@@ -84,25 +84,27 @@ func rename(path string, info os.FileInfo, err error) error {
 		return err
 	}
 
-	if info.Name()[:1] == "." {
-		// ignore all sub files of hidden dir
-		if info.IsDir() {
-			return filepath.SkipDir
-		}
-		// ignore hidden file
+	// ignore sub directory
+	if info.IsDir() && len(filepath.Dir(path)) >= len(root) {
+		return filepath.SkipDir
+	}
+
+	// ignore sub directory files
+	if filepath.Dir(path) != root {
 		return nil
 	}
 
-	if info.IsDir() {
+	// ignore hidden file
+	if info.Name()[:1] == "." {
 		return nil
 	}
 
 	tname, err := timename(path, info)
 	if err != nil {
 		if debug {
-			fmt.Printf("%s => %v\n", simplePath(path), err)
+			fmt.Printf("%s => %v\n", relPath(path), err)
 		} else {
-			fmt.Printf("%s => ?\n", simplePath(path))
+			fmt.Printf("%s => ?\n", relPath(path))
 		}
 		return nil
 	}
@@ -116,7 +118,8 @@ func rename(path string, info os.FileInfo, err error) error {
 	}
 	existname[newpath] = true
 
-	fmt.Printf("%s => %s\n", simplePath(path), simplePath(newpath))
+	fmt.Printf("%s => %s\n", relPath(path), relPath(newpath))
+
 	if doit {
 		err = os.Rename(path, newpath)
 		if err != nil {
@@ -128,14 +131,9 @@ func rename(path string, info os.FileInfo, err error) error {
 	return nil
 }
 
-func simplePath(p string) string {
-	if filepath.HasPrefix(p, root) {
-		p = p[len(root):]
-	}
-	if p[:1] == "/" {
-		p = p[1:]
-	}
-	return p
+func relPath(p string) string {
+	r, _ := filepath.Rel(root, p)
+	return r
 }
 
 func validPath(path string) string {

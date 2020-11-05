@@ -20,9 +20,10 @@ func Test_timename(t *testing.T) {
 		{"", modeEXIF, "testdata/jolla.jpg", "20140921080056", false},
 		{"", modeEXIF, "testdata/lengtoo.jpg", "", true},
 
-		{"", modeMtime, "testdata/canon_40d.jpg", "20200413094815", false},
-		{"", modeMtime, "testdata/jolla.jpg", "20200413094831", false},
-		{"", modeMtime, "testdata/lengtoo.jpg", "20200413094637", false},
+		// mtime 只验证结果长度, 因为这个时间会变化
+		{"", modeMtime, "testdata/canon_40d.jpg", "", false},
+		{"", modeMtime, "testdata/jolla.jpg", "", false},
+		{"", modeMtime, "testdata/lengtoo.jpg", "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -37,8 +38,16 @@ func Test_timename(t *testing.T) {
 				t.Errorf("timename() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if gotTname != tt.wantTname {
-				t.Errorf("timename() = %v, want %v", gotTname, tt.wantTname)
+
+			switch mode {
+			case modeEXIF:
+				if gotTname != tt.wantTname {
+					t.Errorf("timename() = %v, want %v", gotTname, tt.wantTname)
+				}
+			case modeMtime:
+				if len(gotTname) != 14 {
+					t.Errorf("timename().len = %v, want %v", len(gotTname), 14)
+				}
 			}
 		})
 	}
