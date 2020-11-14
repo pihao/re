@@ -11,7 +11,7 @@ import (
 	"github.com/rwcarlsen/goexif/exif"
 )
 
-const version = "1.0.0"
+const version = "1.0.1"
 
 var (
 	mode      string
@@ -31,7 +31,7 @@ func main() {
 	fv := flag.Bool("v", false, "Show version.")
 	fexif := flag.Bool("exif", false, "Rename with EXIF time.")
 	fmtime := flag.Bool("mtime", false, "Rename with modify time.")
-	froot := flag.String("root", ".", "File root path.")
+	froot := flag.String("path", ".", "File path.")
 	ftz := flag.String("tz", "Asia/Chongqing", "Time zone.")
 	fdoit := flag.Bool("doit", false, "Do it (not dry run).")
 	fdebug := flag.Bool("debug", false, "Debug mode.")

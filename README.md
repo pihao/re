@@ -6,6 +6,6 @@ Usage:
 
     go get -u github.com/pihao/re
 
-    re -root ./testdata -exif
-    re -root ./testdata -exif -doit
-    re -root ./testdata -exif -tz UTC
+    re -path ./testdata -exif
+    re -path ./testdata -exif -doit
+    re -path ./testdata -exif -tz UTC
