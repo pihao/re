@@ -11,7 +11,7 @@ import (
 	"github.com/rwcarlsen/goexif/exif"
 )
 
-const version = "1.0.1"
+const version = "1.0.3"
 
 var (
 	mode      string
