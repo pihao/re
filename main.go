@@ -23,6 +23,8 @@ var (
 	doit  bool
 	loc   *time.Location
 
+	ignoreSubDir = false
+
 	existname map[string]bool
 )
 
@@ -31,7 +33,7 @@ func main() {
 	fv := flag.Bool("v", false, "Show version.")
 	fexif := flag.Bool("exif", false, "Rename with EXIF time.")
 	fmtime := flag.Bool("mtime", false, "Rename with modify time.")
-	froot := flag.String("path", ".", "File path.")
+	fpath := flag.String("path", ".", "File path.")
 	ftz := flag.String("tz", "Asia/Chongqing", "Time zone.")
 	fdoit := flag.Bool("doit", false, "Do it (not dry run).")
 	fdebug := flag.Bool("debug", false, "Debug mode.")
@@ -72,30 +74,41 @@ func main() {
 	debug = *fdebug
 	existname = make(map[string]bool)
 
-	root = validPath(*froot)
+	root = validPath(*fpath)
 	filepath.Walk(root, rename)
 }
 
 func rename(path string, info os.FileInfo, err error) error {
 	if err != nil {
-		if debug {
-			fmt.Println(err)
-		}
-		return err
-	}
-
-	// ignore sub directory
-	if info.IsDir() && len(filepath.Dir(path)) >= len(root) {
-		return filepath.SkipDir
-	}
-
-	// ignore sub directory files
-	if filepath.Dir(path) != root {
+		fmt.Println(err)
 		return nil
 	}
 
-	// ignore hidden file
+	if path == root {
+		if debug {
+			fmt.Printf("ignore: root path: %s\n", relPath(path))
+		}
+		return nil
+	}
+
+	if ignoreSubDir && info.IsDir() && len(filepath.Dir(path)) >= len(root) {
+		if debug {
+			fmt.Printf("ignore: sub-directory: %s\n", relPath(path))
+		}
+		return filepath.SkipDir
+	}
+
+	if filepath.Dir(path) != root {
+		if debug {
+			fmt.Printf("ignore: sub-directory file: %s\n", relPath(path))
+		}
+		return nil
+	}
+
 	if info.Name()[:1] == "." {
+		if debug {
+			fmt.Printf("ignore: hidden file: %s\n", relPath(path))
+		}
 		return nil
 	}
 
@@ -124,7 +137,7 @@ func rename(path string, info os.FileInfo, err error) error {
 		err = os.Rename(path, newpath)
 		if err != nil {
 			fmt.Println(err)
-			return err
+			return nil
 		}
 	}
 
