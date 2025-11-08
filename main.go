@@ -6,75 +6,76 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/rwcarlsen/goexif/exif"
 )
 
-const version = "1.0.3"
+const version = "1.1.0"
+
+const (
+	modeExif  = "exif"
+	modeMtime = "mtime"
+)
 
 var (
-	mode      string
-	modeEXIF  = "exif"
-	modeMtime = "mtime"
+	loc *time.Location
 
-	debug bool
-	root  string
-	doit  bool
-	loc   *time.Location
-
-	ignoreSubDir = false
-
+	root      string
 	existname map[string]bool
 )
 
+var option = struct {
+	showHelp    bool
+	showVersion bool
+	debug       bool
+	dryRun      bool
+	path        string
+	mode        string
+	timezone    string
+	recursive   bool
+}{}
+
 func main() {
-	fh := flag.Bool("h", false, "Show this.")
-	fv := flag.Bool("v", false, "Show version.")
-	fexif := flag.Bool("exif", false, "Rename with EXIF time.")
-	fmtime := flag.Bool("mtime", false, "Rename with modify time.")
-	fpath := flag.String("path", ".", "File path.")
-	ftz := flag.String("tz", "Asia/Chongqing", "Time zone.")
-	fdoit := flag.Bool("doit", false, "Do it (not dry run).")
-	fdebug := flag.Bool("debug", false, "Debug mode.")
+	flag.BoolVar(&option.showHelp, "h", false, "Show this.")
+	flag.BoolVar(&option.showVersion, "v", false, "Show version.")
+	flag.BoolVar(&option.debug, "d", false, "Debug mode.")
+	flag.BoolVar(&option.dryRun, "n", false, "Do it (not dry run).")
+	flag.StringVar(&option.path, "p", ".", "File path.")
+	flag.StringVar(&option.mode, "m", "exif", "Rename mode. valid option: exif, mtime.")
+	flag.StringVar(&option.timezone, "t", "Asia/Chongqing", "Time zone.")
+	flag.BoolVar(&option.recursive, "s", true, "recursive into directories.")
 	flag.Parse()
 
-	if *fh || len(os.Args) <= 1 {
+	if option.showHelp || len(os.Args) <= 1 {
 		fmt.Printf("EXAMPLE\n\n" +
-			"    re -path ./testdata -exif\n" +
-			"    re -path ./testdata -exif -doit\n" +
-			"    re -path ./testdata -exif -tz UTC\n\n" +
+			"    re -p ./testdata -e -n\n" +
+			"    re -p ./testdata -e\n" +
+			"    re -p ./testdata -e -t UTC\n\n" +
 			"OPTION\n\n")
 		flag.PrintDefaults()
 		return
 	}
 
-	if *fv {
+	if option.showVersion {
 		fmt.Println(version)
 		return
 	}
 
-	switch {
-	case *fexif:
-		mode = modeEXIF
-	case *fmtime:
-		mode = modeMtime
-	default:
-		fmt.Println("require -exif or -mtime")
+	if slices.Contains([]string{modeExif, modeMtime}, option.mode) {
+		fmt.Println("require one of -e and -m option")
 		return
 	}
 
-	if l, err := time.LoadLocation(*ftz); err != nil {
-		log.Fatalf("time zone (%s) error: %v", *ftz, err)
+	if l, err := time.LoadLocation(option.timezone); err != nil {
+		log.Fatalf("time zone (%s) error: %v", option.timezone, err)
 	} else {
 		loc = l
 	}
 
-	doit = *fdoit
-	debug = *fdebug
 	existname = make(map[string]bool)
-
-	root = validPath(*fpath)
+	root = validPath(option.path)
 	filepath.Walk(root, rename)
 }
 
@@ -85,28 +86,28 @@ func rename(path string, info os.FileInfo, err error) error {
 	}
 
 	if path == root {
-		if debug {
+		if option.debug {
 			fmt.Printf("ignore: root path: %s\n", relPath(path))
 		}
 		return nil
 	}
 
-	if ignoreSubDir && info.IsDir() && len(filepath.Dir(path)) >= len(root) {
-		if debug {
+	if !option.recursive && info.IsDir() && len(filepath.Dir(path)) >= len(root) {
+		if option.debug {
 			fmt.Printf("ignore: sub-directory: %s\n", relPath(path))
 		}
 		return filepath.SkipDir
 	}
 
 	if filepath.Dir(path) != root {
-		if debug {
+		if option.debug {
 			fmt.Printf("ignore: sub-directory file: %s\n", relPath(path))
 		}
 		return nil
 	}
 
 	if info.Name()[:1] == "." {
-		if debug {
+		if option.debug {
 			fmt.Printf("ignore: hidden file: %s\n", relPath(path))
 		}
 		return nil
@@ -114,7 +115,7 @@ func rename(path string, info os.FileInfo, err error) error {
 
 	tname, err := timename(path, info)
 	if err != nil {
-		if debug {
+		if option.debug {
 			fmt.Printf("%s => %v\n", relPath(path), err)
 		} else {
 			fmt.Printf("%s => ?\n", relPath(path))
@@ -133,7 +134,7 @@ func rename(path string, info os.FileInfo, err error) error {
 
 	fmt.Printf("%s => %s\n", relPath(path), relPath(newpath))
 
-	if doit {
+	if !option.dryRun {
 		err = os.Rename(path, newpath)
 		if err != nil {
 			fmt.Println(err)
@@ -169,8 +170,8 @@ func validPath(path string) string {
 
 func timename(path string, info os.FileInfo) (tname string, err error) {
 	var t *time.Time
-	switch mode {
-	case modeEXIF:
+	switch option.mode {
+	case modeExif:
 		t, err = exiftime(path)
 		if err != nil {
 			return "", err
@@ -179,7 +180,7 @@ func timename(path string, info os.FileInfo) (tname string, err error) {
 		x := info.ModTime()
 		t = &x
 	default:
-		return "", fmt.Errorf("unknown mode: %s", mode)
+		return "", fmt.Errorf("invalid mode: %s", option.mode)
 	}
 
 	return t.In(loc).Format("20060102150405"), nil
@@ -206,5 +207,5 @@ func exiftime(fname string) (*time.Time, error) {
 
 func isExist(path string) bool {
 	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
+	return os.IsExist(err)
 }

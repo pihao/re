@@ -16,9 +16,9 @@ func Test_timename(t *testing.T) {
 		wantTname string
 		wantErr   bool
 	}{
-		{"", modeEXIF, "testdata/canon_40d.jpg", "20080530075601", false},
-		{"", modeEXIF, "testdata/jolla.jpg", "20140921080056", false},
-		{"", modeEXIF, "testdata/lengtoo.jpg", "", true},
+		{"", modeExif, "testdata/canon_40d.jpg", "20080530075601", false},
+		{"", modeExif, "testdata/jolla.jpg", "20140921080056", false},
+		{"", modeExif, "testdata/lengtoo.jpg", "", true},
 
 		// mtime 只验证结果长度, 因为这个时间会变化
 		{"", modeMtime, "testdata/canon_40d.jpg", "", false},
@@ -27,7 +27,8 @@ func Test_timename(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			mode = tt.mode
+			option.mode = tt.mode
+
 			info, err := os.Stat(tt.path)
 			if err != nil {
 				t.Errorf("test file not exist: %v", tt.path)
@@ -39,8 +40,8 @@ func Test_timename(t *testing.T) {
 				return
 			}
 
-			switch mode {
-			case modeEXIF:
+			switch option.mode {
+			case modeExif:
 				if gotTname != tt.wantTname {
 					t.Errorf("timename() = %v, want %v", gotTname, tt.wantTname)
 				}
@@ -48,6 +49,8 @@ func Test_timename(t *testing.T) {
 				if len(gotTname) != 14 {
 					t.Errorf("timename().len = %v, want %v", len(gotTname), 14)
 				}
+			default:
+				t.Errorf("invalid mode: %s", tt.mode)
 			}
 		})
 	}
