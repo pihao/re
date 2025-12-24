@@ -22,8 +22,7 @@ const (
 var (
 	loc *time.Location
 
-	root      string
-	existname map[string]bool
+	root string
 )
 
 var option = struct {
@@ -34,25 +33,23 @@ var option = struct {
 	path        string
 	mode        string
 	timezone    string
-	recursive   bool
 }{}
 
 func main() {
 	flag.BoolVar(&option.showHelp, "h", false, "Show this.")
 	flag.BoolVar(&option.showVersion, "v", false, "Show version.")
 	flag.BoolVar(&option.debug, "d", false, "Debug mode.")
-	flag.BoolVar(&option.dryRun, "n", false, "Do it (not dry run).")
+	flag.BoolVar(&option.dryRun, "n", false, "Dry run.")
 	flag.StringVar(&option.path, "p", ".", "File path.")
 	flag.StringVar(&option.mode, "m", "exif", "Rename mode. valid option: exif, mtime.")
 	flag.StringVar(&option.timezone, "t", "Asia/Chongqing", "Time zone.")
-	flag.BoolVar(&option.recursive, "s", true, "recursive into directories.")
 	flag.Parse()
 
 	if option.showHelp || len(os.Args) <= 1 {
 		fmt.Printf("EXAMPLE\n\n" +
-			"    re -p ./testdata -e -n\n" +
-			"    re -p ./testdata -e\n" +
-			"    re -p ./testdata -e -t UTC\n\n" +
+			"    re -p ./testdata -m exif -n\n" +
+			"    re -p ./testdata -m exif\n" +
+			"    re -p ./testdata -m exif -t UTC\n\n" +
 			"OPTION\n\n")
 		flag.PrintDefaults()
 		return
@@ -63,7 +60,7 @@ func main() {
 		return
 	}
 
-	if slices.Contains([]string{modeExif, modeMtime}, option.mode) {
+	if !slices.Contains([]string{modeExif, modeMtime}, option.mode) {
 		fmt.Println("require one of -e and -m option")
 		return
 	}
@@ -74,12 +71,30 @@ func main() {
 		loc = l
 	}
 
-	existname = make(map[string]bool)
-	root = validPath(option.path)
-	filepath.Walk(root, rename)
+	root = mustFormatPath(option.path)
+	if err := filepath.Walk(root, collect); err != nil {
+		log.Fatal(err)
+	}
+	rename(files)
 }
 
-func rename(path string, info os.FileInfo, err error) error {
+var (
+	existname = map[string]bool{}
+	files     = [][2]string{}
+)
+
+func rename(files [][2]string) {
+	for _, e := range files {
+		fmt.Printf("%s => %s\n", relPath(e[0]), relPath(e[1]))
+		if !option.dryRun {
+			if err := os.Rename(e[0], e[1]); err != nil {
+				fmt.Println(err)
+			}
+		}
+	}
+}
+
+func collect(path string, info os.FileInfo, err error) error {
 	if err != nil {
 		fmt.Println(err)
 		return nil
@@ -92,16 +107,12 @@ func rename(path string, info os.FileInfo, err error) error {
 		return nil
 	}
 
-	if !option.recursive && info.IsDir() && len(filepath.Dir(path)) >= len(root) {
+	if len(filepath.Dir(path)) > len(root) {
 		if option.debug {
-			fmt.Printf("ignore: sub-directory: %s\n", relPath(path))
+			fmt.Printf("ignore: recursive: %s\n", relPath(path))
 		}
-		return filepath.SkipDir
-	}
-
-	if filepath.Dir(path) != root {
-		if option.debug {
-			fmt.Printf("ignore: sub-directory file: %s\n", relPath(path))
+		if info.IsDir() {
+			return filepath.SkipDir
 		}
 		return nil
 	}
@@ -126,21 +137,13 @@ func rename(path string, info os.FileInfo, err error) error {
 	newname := fmt.Sprintf("%s_%s", tname, filepath.Base(path))
 	newpath := filepath.Join(filepath.Dir(path), newname)
 
-	if existname[newpath] || isExist(newpath) {
+	if existname[newpath] || !isNotExist(newpath) {
 		fmt.Printf("%s => [duplication of name]\n", path)
 		return nil
 	}
 	existname[newpath] = true
 
-	fmt.Printf("%s => %s\n", relPath(path), relPath(newpath))
-
-	if !option.dryRun {
-		err = os.Rename(path, newpath)
-		if err != nil {
-			fmt.Println(err)
-			return nil
-		}
-	}
+	files = append(files, [2]string{path, newpath})
 
 	return nil
 }
@@ -150,7 +153,7 @@ func relPath(p string) string {
 	return r
 }
 
-func validPath(path string) string {
+func mustFormatPath(path string) string {
 	if path == "" {
 		path = "."
 	}
@@ -161,7 +164,7 @@ func validPath(path string) string {
 		path = p
 	}
 
-	if !isExist(path) {
+	if isNotExist(path) {
 		log.Fatalf("path(%s) not exist", path)
 	}
 
@@ -205,7 +208,7 @@ func exiftime(fname string) (*time.Time, error) {
 	return &t, nil
 }
 
-func isExist(path string) bool {
+func isNotExist(path string) bool {
 	_, err := os.Stat(path)
-	return os.IsExist(err)
+	return os.IsNotExist(err)
 }
