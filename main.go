@@ -12,11 +12,12 @@ import (
 	"github.com/rwcarlsen/goexif/exif"
 )
 
-const version = "1.1.0"
+const version = "1.2.0"
 
 const (
-	modeExif  = "exif"
-	modeMtime = "mtime"
+	modeExif  = "exif"  // EXIF time.
+	modeMtime = "mtime" // Modify time.
+	modeBtime = "btime" // Birth/Create time.
 )
 
 var (
@@ -41,7 +42,7 @@ func main() {
 	flag.BoolVar(&option.debug, "d", false, "Debug mode.")
 	flag.BoolVar(&option.dryRun, "n", false, "Dry run.")
 	flag.StringVar(&option.path, "p", ".", "File path.")
-	flag.StringVar(&option.mode, "m", "exif", "Rename mode. valid option: exif, mtime.")
+	flag.StringVar(&option.mode, "m", "exif", "Rename mode. valid option: exif, mtime, btime.")
 	flag.StringVar(&option.timezone, "t", "Asia/Chongqing", "Time zone.")
 	flag.Parse()
 
@@ -60,7 +61,7 @@ func main() {
 		return
 	}
 
-	if !slices.Contains([]string{modeExif, modeMtime}, option.mode) {
+	if !slices.Contains([]string{modeExif, modeMtime, modeBtime}, option.mode) {
 		fmt.Println("require one of -e and -m option")
 		return
 	}
@@ -182,8 +183,15 @@ func timename(path string, info os.FileInfo) (tname string, err error) {
 	case modeMtime:
 		x := info.ModTime()
 		t = &x
+	case modeBtime:
+		x := GetBirthTime(info)
+		t = &x
 	default:
 		return "", fmt.Errorf("invalid mode: %s", option.mode)
+	}
+
+	if t.IsZero() {
+		return "", fmt.Errorf("failed to get time")
 	}
 
 	return t.In(loc).Format("20060102150405"), nil
